@@ -20,7 +20,7 @@ if not os.path.exists(HISTORY_DIR):
     os.makedirs(HISTORY_DIR)
 
 def get_data():
-    print("🚀 啟動爬蟲 (自動翻頁合併版)...")
+    print("🚀 啟動爬蟲 (專攻「顯示更多」版)...")
     options = Options()
     options.add_argument('--headless')
     options.add_argument('--no-sandbox')
@@ -34,118 +34,75 @@ def get_data():
         print(f"❌ Driver 安裝失敗: {e}")
         return None
     
-    all_records = pd.DataFrame() # 用來收集每一頁的資料
-    
+    target_df = None
     try:
         driver.get(URL)
         print("⏳ 等待網頁載入...")
         time.sleep(10) 
         
-        for page in range(1, 15): # 最多翻 14 頁 (確保能抓完)
-            print(f"📄 正在讀取第 {page} 頁...")
-            time.sleep(3) # 等待表格渲染
-            
-            html = driver.page_source
-            page_df = None
+        # --- 🌟 破解「顯示更多」按鈕 ---
+        click_count = 0
+        while click_count < 20: # 最多點 20 次，防止無限迴圈
             try:
-                dfs = pd.read_html(StringIO(html))
-                for df in dfs:
-                    if isinstance(df.columns, pd.MultiIndex):
-                        df.columns = df.columns.get_level_values(-1)
-                    df.columns = df.columns.astype(str).str.strip()
-                    cols = str(df.columns.tolist())
-                    if ("權重" in cols or "持股" in cols or "比例" in cols) and ("名稱" in cols or "股票" in cols):
-                        page_df = df
-                        break
-            except:
-                pass
+                # 尋找包含「顯示更多」文字的按鈕或連結
+                load_more_btn = None
+                xpaths = [
+                    "//button[contains(., '顯示更多')]",
+                    "//a[contains(., '顯示更多')]",
+                    "//span[contains(., '顯示更多')]/parent::*"
+                ]
                 
-            if page_df is not None and not page_df.empty:
-                # 檢查是否和上一頁重複 (防止按鈕失效但沒報錯)
-                if not all_records.empty:
-                    last_item = all_records.iloc[-1].to_string()
-                    current_last = page_df.iloc[-1].to_string()
-                    if last_item == current_last:
-                        print("⚠️ 這一頁資料跟上一頁一樣，已達最後一頁。")
-                        break
-                        
-                # 將這頁的資料加入總表
-                if all_records.empty:
-                    all_records = page_df
-                else:
-                    all_records = pd.concat([all_records, page_df], ignore_index=True)
-                print(f"✅ 成功抓取！目前累計: {len(all_records)} 筆")
-            else:
-                print("❌ 這頁找不到表格")
-                break
-
-            # --- 尋找並點擊下一頁 ---
-            print("🔍 尋找下一頁按鈕...")
-            next_btn = None
-            
-            # 嘗試各種常見的下一頁 CSS 選擇器
-            selectors = [
-                "li.ant-pagination-next:not(.ant-pagination-disabled)", # Ant Design
-                "li.next:not(.disabled)", # Bootstrap
-                "button.next:not([disabled])",
-                "[title='下一頁']:not(.ant-pagination-disabled)",
-                ".pagination-next:not(.disabled)"
-            ]
-            for sel in selectors:
-                try:
-                    elements = driver.find_elements(By.CSS_SELECTOR, sel)
+                for xp in xpaths:
+                    elements = driver.find_elements(By.XPATH, xp)
                     for el in elements:
                         if el.is_displayed():
-                            next_btn = el
+                            load_more_btn = el
                             break
-                except: pass
-                if next_btn: break
+                    if load_more_btn: break
                 
-            # 如果 CSS 找不到，用 XPATH 找含有 "下一頁" 或 ">" 的元素
-            if not next_btn:
-                try:
-                    xpaths = [
-                        "//li[contains(@class, 'next')]",
-                        "//a[contains(text(), '下一頁')]",
-                        "//button[contains(text(), '下一頁')]",
-                        "//i[contains(@class, 'right')]/parent::*" # 箭頭圖示
-                    ]
-                    for xp in xpaths:
-                        elements = driver.find_elements(By.XPATH, xp)
-                        for el in elements:
-                            if el.is_displayed():
-                                next_btn = el
-                                break
-                        if next_btn: break
-                except: pass
-
-            if next_btn:
-                classes = next_btn.get_attribute("class") or ""
-                if "disabled" in classes.lower() or next_btn.get_attribute("disabled") or next_btn.get_attribute("aria-disabled") == "true":
-                    print("🛑 下一頁按鈕已反灰，停止翻頁。")
+                if load_more_btn:
+                    driver.execute_script("arguments[0].click();", load_more_btn)
+                    click_count += 1
+                    print(f"👉 第 {click_count} 次點擊「顯示更多」...")
+                    time.sleep(3) # 等待新資料長出來
+                else:
+                    print("🛑 畫面上已經找不到「顯示更多」了，資料已全部展開！")
                     break
-                
-                # 用 JS 點擊比較不會被擋住
-                driver.execute_script("arguments[0].click();", next_btn)
-                print("👉 點擊下一頁...")
-            else:
-                print("🛑 畫面上找不到下一頁按鈕，停止翻頁。")
+            except Exception as e:
+                print("🛑 點擊過程中發生狀況，提早結束展開。")
                 break
+                
+        # --- 展開完畢，開始抓取整張超大表格 ---
+        print("⏳ 正在擷取完整表格...")
+        time.sleep(2)
+        
+        try:
+            dfs = pd.read_html(StringIO(driver.page_source))
+        except:
+            print("❌ 找不到表格")
+            return None
 
+        for df in dfs:
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(-1)
+            df.columns = df.columns.astype(str).str.strip()
+            cols = str(df.columns.tolist())
+            if ("權重" in cols or "持股" in cols or "比例" in cols) and ("名稱" in cols or "股票" in cols):
+                if len(df) > 15: # 確保抓到的是展開後的長表格
+                    target_df = df
+                    break
+                else:
+                    target_df = df # 如果真的只有十幾檔也先備用
+                    
     except Exception as e:
         print(f"❌ 錯誤: {e}")
     finally:
         if 'driver' in locals():
             driver.quit()
             
-    # 最後去重複 (以防萬一)
-    if not all_records.empty:
-        col_n = next((c for c in all_records.columns if '名稱' in c), None)
-        if col_n:
-            all_records = all_records.drop_duplicates(subset=[col_n]).reset_index(drop=True)
-        print(f"🎉 最終共取得 {len(all_records)} 筆不重複持股！")
-        
-    return all_records if not all_records.empty else None
+    if target_df is not None:
+        print(f"🎉 最終共取得 {len(target_df)} 筆持股！")
+    return target_df
 
 def clean_percentage(x):
     try:
