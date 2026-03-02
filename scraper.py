@@ -11,7 +11,7 @@ import random
 from io import StringIO
 
 # --- 設定 ---
-# 00993A 安聯台灣主動式ETF 官網網址 (?tab=4 通常是持股分頁)
+# 00993A 安聯台灣主動式ETF 官網網址
 URL = "https://etf.allianzgi.com.tw/etf-info/E0002?tab=4"
 HISTORY_DIR = "history"
 HTML_FILENAME = "index.html"
@@ -38,7 +38,42 @@ def get_data():
     target_df = None
     try:
         driver.get(URL)
-        time.sleep(10) # 確保動態表格載入
+        print("⏳ 等待網頁載入...")
+        time.sleep(8) 
+        
+        # --- 🌟 新增：破解分頁，強制展開全部資料 ---
+        print("🔍 嘗試展開所有分頁資料...")
+        driver.execute_script("""
+            // 尋找所有的下拉選單，並把它切換到最大數字或「全部」
+            let selects = document.querySelectorAll('select');
+            selects.forEach(sel => {
+                let maxVal = -1;
+                let targetIndex = -1;
+                for(let i=0; i<sel.options.length; i++){
+                    let txt = sel.options[i].text.trim();
+                    let val = sel.options[i].value;
+                    if(txt === '全部' || txt.toUpperCase() === 'ALL' || val === '-1') {
+                        targetIndex = i; 
+                        break;
+                    }
+                    let num = parseInt(txt);
+                    if(!isNaN(num) && num > maxVal) {
+                        maxVal = num; 
+                        targetIndex = i;
+                    }
+                }
+                if(targetIndex !== -1) {
+                    sel.selectedIndex = targetIndex;
+                    sel.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+            // 滾動到底部 (對付某些下滑才會載入的網站)
+            window.scrollTo(0, document.body.scrollHeight);
+        """)
+        print("⏳ 等待表格重新生成...")
+        time.sleep(5) # 給網頁 5 秒鐘去載入被展開的長表格
+        # ------------------------------------------
+
         try:
             dfs = pd.read_html(StringIO(driver.page_source))
         except:
@@ -50,7 +85,6 @@ def get_data():
                 df.columns = df.columns.get_level_values(-1)
             df.columns = df.columns.astype(str).str.strip()
             cols = str(df.columns.tolist())
-            # 安聯的表格欄位可能包含 "比例" 而非 "權重"，所以增加判斷條件
             if ("權重" in cols or "持股" in cols or "比例" in cols) and ("名稱" in cols or "股票" in cols):
                 target_df = df
                 break
@@ -84,7 +118,6 @@ def main():
         print("❌ 抓取失敗，程式結束")
         return
 
-    # 找出對應欄位
     col_w = next((c for c in df_now.columns if '權重' in c or '比例' in c), None)
     col_n = next((c for c in df_now.columns if '名稱' in c), None)
     col_c = next((c for c in df_now.columns if '代號' in c), col_n)
