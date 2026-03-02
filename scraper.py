@@ -4,8 +4,6 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 import os
 import glob
 import time
@@ -22,7 +20,7 @@ if not os.path.exists(HISTORY_DIR):
     os.makedirs(HISTORY_DIR)
 
 def get_data():
-    print("🚀 啟動爬蟲 (00993A 精準定位版)...")
+    print("🚀 啟動爬蟲 (濾渣精準點擊版)...")
     options = Options()
     options.add_argument('--headless')
     options.add_argument('--no-sandbox')
@@ -40,45 +38,55 @@ def get_data():
     try:
         driver.get(URL)
         print("⏳ 等待網頁載入...")
-        time.sleep(12) # 增加等待時間
+        time.sleep(10)
         
-        # 強制點擊一次持股權重 Tab (確保分頁被啟動)
+        # 1. 關閉可能擋住按鈕的 Cookie 橫幅
         try:
-            tab_btn = driver.find_element(By.XPATH, "//div[contains(text(), '持股權重')] | //a[contains(text(), '持股權重')]")
-            driver.execute_script("arguments[0].click();", tab_btn)
-            time.sleep(5)
-        except:
-            print("⚠️ 無法點擊 Tab，嘗試直接展開")
+            cookie_btn = driver.find_element(By.XPATH, "//button[contains(text(), '接受') or contains(text(), '同意')]")
+            driver.execute_script("arguments[0].click();", cookie_btn)
+            time.sleep(1)
+        except: pass
 
-        # --- 破解「顯示更多」 ---
+        # 2. 暴力尋找並點擊「顯示更多」
         click_count = 0
         while click_count < 15:
             try:
-                # 專門鎖定安聯的按鈕樣式
-                btns = driver.find_elements(By.XPATH, "//button[contains(., '顯示更多')]")
-                if btns and btns[0].is_displayed():
-                    driver.execute_script("arguments[0].click();", btns[0])
+                # 尋找畫面上所有的 "顯示更多"
+                btns = driver.find_elements(By.XPATH, "//*[contains(text(), '顯示更多')]")
+                visible_btn = None
+                for b in btns:
+                    if b.is_displayed():
+                        visible_btn = b
+                        break
+                
+                if visible_btn:
+                    # 先把畫面滾動到按鈕的位置，確保沒有被遮擋
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", visible_btn)
+                    time.sleep(1)
+                    # 點擊按鈕
+                    driver.execute_script("arguments[0].click();", visible_btn)
                     click_count += 1
                     print(f"👉 第 {click_count} 次點擊「顯示更多」...")
-                    time.sleep(3)
+                    time.sleep(3) # 等待新表格長出來
                 else:
+                    print("✅ 畫面上已無「顯示更多」按鈕，展開完畢！")
                     break
-            except:
+            except Exception as e:
+                print("🛑 點擊結束。")
                 break
                 
         print("⏳ 正在擷取完整表格...")
         time.sleep(3)
         
         dfs = pd.read_html(StringIO(driver.page_source))
-        print(f"🔍 掃描到 {len(dfs)} 個表格，篩選中...")
-
+        
         for df in dfs:
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(-1)
             df.columns = df.columns.astype(str).str.strip()
-            
-            # 必須同時包含「名稱」與「比例(或權重)」，且筆數要大於 2 (避開期貨表)
             cols = str(df.columns.tolist())
+            
+            # 必須包含名稱與比例
             if ("名稱" in cols or "股票" in cols) and ("比例" in cols or "權重" in cols or "持股" in cols):
                 if len(df) > 5:
                     target_df = df
@@ -90,8 +98,6 @@ def get_data():
         if 'driver' in locals():
             driver.quit()
             
-    if target_df is not None:
-        print(f"🎉 成功抓取！總共取得 {len(target_df)} 筆持股！")
     return target_df
 
 def clean_percentage(x):
@@ -117,19 +123,23 @@ def main():
         print("❌ 抓取失敗，程式結束")
         return
 
-    # 找出核心欄位 (優先找 名稱 與 比例/權重)
     col_n = next((c for c in df_now.columns if '名稱' in c or '成分股' in c), None)
     col_w = next((c for c in df_now.columns if any(k in c for k in ['比例', '權重', '持股'])), None)
     col_c = next((c for c in df_now.columns if '代號' in c), col_n)
 
     if not col_n or not col_w:
-        print(f"❌ 欄位辨識失敗。現有欄位: {df_now.columns.tolist()}")
+        print("❌ 欄位辨識失敗")
         return
+
+    # 🌟 關鍵修復：把名稱叫做「顯示更多」或空白的幽靈股票刪除！
+    df_now = df_now[~df_now[col_n].astype(str).str.contains('顯示更多', na=False)]
+    df_now = df_now[df_now[col_n].astype(str).str.strip() != '']
+    
+    print(f"🎉 成功過濾渣滓！總共取得 {len(df_now)} 筆真正持股！")
 
     today = datetime.date.today().strftime("%Y-%m-%d")
     csv_path = os.path.join(HISTORY_DIR, f"portfolio_{today}.csv")
     df_now.to_csv(csv_path, index=False, encoding="utf-8-sig")
-    print(f"✅ 今日資料已儲存")
 
     files = sorted(glob.glob(os.path.join(HISTORY_DIR, "*.csv")))
     if len(files) < 2:
@@ -140,11 +150,9 @@ def main():
     d_now = os.path.basename(f_now).replace("portfolio_", "").replace(".csv", "")
     d_prev = os.path.basename(f_prev).replace("portfolio_", "").replace(".csv", "")
 
-    # 強制用 index_col 讀取
     df1 = pd.read_csv(f_now, encoding="utf-8-sig").set_index(col_n)
     df2 = pd.read_csv(f_prev, encoding="utf-8-sig").set_index(col_n)
     
-    # 移除重複項
     df1 = df1[~df1.index.duplicated(keep='first')]
     df2 = df2[~df2.index.duplicated(keep='first')]
 
@@ -157,6 +165,9 @@ def main():
     m = m.sort_values(by='sort_val', ascending=False)
 
     for name, r in m.iterrows():
+        # 如果名字是 NaN 或是空的，直接跳過不顯示
+        if pd.isna(name) or str(name).strip() == "": continue
+        
         wn = r[w_new] if pd.notna(r[w_new]) else "0%"
         wo = r[w_old] if pd.notna(r[w_old]) else "0%"
         diff = clean_percentage(wn) - clean_percentage(wo)
