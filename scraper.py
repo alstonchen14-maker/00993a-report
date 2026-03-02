@@ -3,6 +3,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.by import By
 import os
 import glob
 import time
@@ -11,17 +12,15 @@ import random
 from io import StringIO
 
 # --- 設定 ---
-# 00993A 安聯台灣主動式ETF 官網網址
 URL = "https://etf.allianzgi.com.tw/etf-info/E0002?tab=4"
 HISTORY_DIR = "history"
 HTML_FILENAME = "index.html"
 
-# 確保資料夾存在
 if not os.path.exists(HISTORY_DIR):
     os.makedirs(HISTORY_DIR)
 
 def get_data():
-    print("🚀 啟動爬蟲...")
+    print("🚀 啟動爬蟲 (終極破解版)...")
     options = Options()
     options.add_argument('--headless')
     options.add_argument('--no-sandbox')
@@ -38,44 +37,35 @@ def get_data():
     target_df = None
     try:
         driver.get(URL)
-        print("⏳ 等待網頁載入...")
-        time.sleep(8) 
+        print("⏳ 等待網頁初始載入...")
+        time.sleep(10) 
         
-        # --- 🌟 新增：破解分頁，強制展開全部資料 ---
-        print("🔍 嘗試展開所有分頁資料...")
+        # --- 🌟 終極破解：模擬真人連續向下滾動 ---
+        print("🖱️ 開始模擬滾動以加載完整持股...")
+        last_height = driver.execute_script("return document.body.scrollHeight")
+        for i in range(10):  # 最多滾動 10 次
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(2)  # 每次滾動停 2 秒讓資料讀取
+            new_height = driver.execute_script("return document.body.scrollHeight")
+            if new_height == last_height:
+                break
+            last_height = new_height
+            print(f"  > 已滾動第 {i+1} 次")
+
+        # 針對安聯網頁，有些表格需要點擊「載入更多」或切換顯示筆數
+        # 我們直接用 JS 強制把所有隱藏的列顯示出來 (如果有的話)
         driver.execute_script("""
-            // 尋找所有的下拉選單，並把它切換到最大數字或「全部」
-            let selects = document.querySelectorAll('select');
-            selects.forEach(sel => {
-                let maxVal = -1;
-                let targetIndex = -1;
-                for(let i=0; i<sel.options.length; i++){
-                    let txt = sel.options[i].text.trim();
-                    let val = sel.options[i].value;
-                    if(txt === '全部' || txt.toUpperCase() === 'ALL' || val === '-1') {
-                        targetIndex = i; 
-                        break;
-                    }
-                    let num = parseInt(txt);
-                    if(!isNaN(num) && num > maxVal) {
-                        maxVal = num; 
-                        targetIndex = i;
-                    }
-                }
-                if(targetIndex !== -1) {
-                    sel.selectedIndex = targetIndex;
-                    sel.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-            });
-            // 滾動到底部 (對付某些下滑才會載入的網站)
-            window.scrollTo(0, document.body.scrollHeight);
+            let tables = document.querySelectorAll('table');
+            tables.forEach(t => t.style.display = 'block');
         """)
-        print("⏳ 等待表格重新生成...")
-        time.sleep(5) # 給網頁 5 秒鐘去載入被展開的長表格
-        # ------------------------------------------
+        
+        print("⏳ 滾動完成，正在提取表格...")
+        time.sleep(3)
 
         try:
+            # 抓取目前的 HTML
             dfs = pd.read_html(StringIO(driver.page_source))
+            print(f"🔍 找到 {len(dfs)} 個表格")
         except:
             print("❌ 找不到表格")
             return None
@@ -85,15 +75,24 @@ def get_data():
                 df.columns = df.columns.get_level_values(-1)
             df.columns = df.columns.astype(str).str.strip()
             cols = str(df.columns.tolist())
-            if ("權重" in cols or "持股" in cols or "比例" in cols) and ("名稱" in cols or "股票" in cols):
-                target_df = df
-                break
+            
+            # 增加關鍵字「比例」與「成分股」
+            if any(k in cols for k in ["權重", "持股", "比例", "成分股"]) and any(k in cols for k in ["名稱", "股票"]):
+                # 檢查抓到的筆數是否大於 10
+                if len(df) > 5: # 只要不是空表就先收
+                    target_df = df
+                    print(f"✅ 成功抓取表格，目前筆數: {len(target_df)}")
+                    # 如果筆數還是太少，我們繼續找下一個表格 (有些網頁會有好幾個表)
+                    if len(target_df) > 10:
+                        break
     except Exception as e:
         print(f"❌ 錯誤: {e}")
     finally:
         if 'driver' in locals():
             driver.quit()
     return target_df
+
+# ... (下方 clean_percentage, generate_fake_history, main 函數保持不變) ...
 
 def clean_percentage(x):
     try:
@@ -118,7 +117,7 @@ def main():
         print("❌ 抓取失敗，程式結束")
         return
 
-    col_w = next((c for c in df_now.columns if '權重' in c or '比例' in c), None)
+    col_w = next((c for c in df_now.columns if any(k in c for k in ['權重', '比例', '持股'])), None)
     col_n = next((c for c in df_now.columns if '名稱' in c), None)
     col_c = next((c for c in df_now.columns if '代號' in c), col_n)
 
@@ -210,9 +209,9 @@ function downloadCSV() {{
 
         with open(HTML_FILENAME, "w", encoding="utf-8") as f:
             f.write(html)
-        print("✅ HTML 報表生成完畢 (含下載功能)")
+        print("✅ HTML 報表生成完畢")
     else:
-        print("❌ 找不到符合的欄位名稱（可能網站改版了）")
+        print("❌ 找不到符合的欄位名稱")
 
 if __name__ == "__main__":
     main()
