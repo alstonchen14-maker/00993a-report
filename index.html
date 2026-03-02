@@ -1,52 +1,17 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset='utf-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1'>
-<title>00993A ETF 追蹤報表</title>
-<style>
-  body{font-family:"Microsoft JhengHei",sans-serif;max-width:800px;margin:20px auto;padding:10px;background:#f4f4f9}
-  .card{background:white;padding:20px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.1)}
-  table{width:100%;border-collapse:collapse;margin-top:20px}
-  th{background:#2c3e50;color:white;padding:10px;text-align:left}
-  td{padding:10px;border-bottom:1px solid #eee}
-  .btn{
-    display:inline-block; padding:10px 20px; 
-    background-color:#27ae60; color:white; 
-    text-decoration:none; border-radius:5px; 
-    font-weight:bold; cursor:pointer; border:none; margin-bottom:15px;
-  }
-  .btn:hover{background-color:#219150;}
-</style>
-<script>
-function downloadCSV() {
-    var csv = [];
-    var rows = document.querySelectorAll("table tr");
-    for (var i = 0; i < rows.length; i++) {
-        var row = [], cols = rows[i].querySelectorAll("td, th");
-        for (var j = 0; j < cols.length; j++) 
-            row.push(cols[j].innerText.replace(/,/g, ""));
-        csv.push(row.join(","));
-    }
-    var csvFile = new Blob(["\uFEFF" + csv.join("\n")], {type: "text/csv"});
-    var downloadLink = document.createElement("a");
-    downloadLink.download = "00993A_Report_2026-03-02.csv";
-    downloadLink.href = window.URL.createObjectURL(csvFile);
-    downloadLink.style.display = "none";
-    document.body.appendChild(downloadLink);
-    downloadLink.click();
-}
-</script>
-</head>
-<body>
-<div class='card'>
-  <h2>📈 安聯台灣主動式 (00993A)</h2>
-  <p style='color:#666'>更新日期：2026-03-02 (比較對象: 2026-03-01)</p>
-  <button onclick="downloadCSV()" class="btn">📥 下載報表 (Excel)</button>
-  <table>
-    <thead><tr><th>名稱</th><th>舊權重</th><th>新權重</th><th>變動</th></tr></thead>
-    <tbody><tr style='background:#e6ffe6'><td>文曄</td><td>10.05%</td><td>9.79%</td><td style='color:#188038'><b>▼ -0.26%</b></td></tr><tr style='background:#ffe6e6'><td>台積電</td><td>8.43%</td><td>8.72%</td><td style='color:#d93025'><b>▲ +0.29%</b></td></tr><tr style='background:#ffe6e6'><td>聯電</td><td>7.84%</td><td>7.86%</td><td style='color:#d93025'><b>▲ +0.02%</b></td></tr><tr style='background:#ffe6e6'><td>中華電</td><td>7.28%</td><td>7.46%</td><td style='color:#d93025'><b>▲ +0.18%</b></td></tr><tr style='background:#ffe6e6'><td>聯發科</td><td>6.24%</td><td>6.54%</td><td style='color:#d93025'><b>▲ +0.30%</b></td></tr><tr style='background:#e6ffe6'><td>健鼎科技</td><td>3.94%</td><td>3.92%</td><td style='color:#188038'><b>▼ -0.02%</b></td></tr><tr style='background:#e6ffe6'><td>日月光投控</td><td>2.99%</td><td>2.88%</td><td style='color:#188038'><b>▼ -0.11%</b></td></tr><tr style='background:#ffe6e6'><td>美時製藥</td><td>2.21%</td><td>2.40%</td><td style='color:#d93025'><b>▲ +0.19%</b></td></tr><tr style='background:white'><td>國巨*</td><td>2.15%</td><td>2.15%</td><td style='color:#333'><b>- +0.00%</b></td></tr><tr style='background:#e6ffe6'><td>亞德客-KY</td><td>1.79%</td><td>1.74%</td><td style='color:#188038'><b>▼ -0.05%</b></td></tr><tr style='background:white'><td>顯示更多</td><td>0.00%</td><td>顯示更多</td><td style='color:#333'><b>- +0.00%</b></td></tr></tbody>
-  </table>
-</div>
-</body>
-</html>
+<!DOCTYPE html><html><head><meta charset='utf-8'><title>00993A 報表</title>
+    <style>body{font-family:sans-serif;max-width:800px;margin:20px auto;padding:10px;background:#f4f4f9}
+    .card{background:white;padding:20px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.1)}
+    table{width:100%;border-collapse:collapse}th{background:#2c3e50;color:white;padding:10px}td{padding:10px;border-bottom:1px solid #eee}
+    .btn{display:inline-block;padding:10px 20px;background:#27ae60;color:white;text-decoration:none;border-radius:5px;margin-bottom:15px}</style>
+    <script>function downloadCSV() { 
+        let csv = "\uFEFF名稱,舊權重,新權重,變動\n";
+        document.querySelectorAll("table tr").forEach((tr, i) => {
+            if(i>0) csv += Array.from(tr.querySelectorAll("td")).map(td => td.innerText.replace(/,/g,"")).join(",") + "\n";
+        });
+        let link = document.createElement("a");
+        link.href = "data:text/csv;charset=utf-8," + encodeURI(csv);
+        link.download = "00993A_Report.csv"; link.click();
+    }</script></head>
+    <body><div class='card'><h2>📈 安聯台灣主動式 (00993A)</h2><p>更新日期：2026-03-02</p>
+    <a href="javascript:downloadCSV()" class="btn">📥 下載報表 (Excel)</a>
+    <table><thead><tr><th>名稱</th><th>舊權重</th><th>新權重</th><th>變動</th></tr></thead><tbody><tr style='background:#e6ffe6'><td>文曄</td><td>10.05%</td><td>9.79%</td><td style='color:#188038'><b>▼ -0.26%</b></td></tr><tr style='background:#ffe6e6'><td>台積電</td><td>8.43%</td><td>8.72%</td><td style='color:#d93025'><b>▲ +0.29%</b></td></tr><tr style='background:#ffe6e6'><td>聯電</td><td>7.84%</td><td>7.86%</td><td style='color:#d93025'><b>▲ +0.02%</b></td></tr><tr style='background:#ffe6e6'><td>中華電</td><td>7.28%</td><td>7.46%</td><td style='color:#d93025'><b>▲ +0.18%</b></td></tr><tr style='background:#ffe6e6'><td>聯發科</td><td>6.24%</td><td>6.54%</td><td style='color:#d93025'><b>▲ +0.30%</b></td></tr><tr style='background:#e6ffe6'><td>健鼎科技</td><td>3.94%</td><td>3.92%</td><td style='color:#188038'><b>▼ -0.02%</b></td></tr><tr style='background:#e6ffe6'><td>日月光投控</td><td>2.99%</td><td>2.88%</td><td style='color:#188038'><b>▼ -0.11%</b></td></tr><tr style='background:#ffe6e6'><td>美時製藥</td><td>2.21%</td><td>2.40%</td><td style='color:#d93025'><b>▲ +0.19%</b></td></tr><tr style='background:white'><td>國巨*</td><td>2.15%</td><td>2.15%</td><td style='color:#333'><b>- +0.00%</b></td></tr><tr style='background:#e6ffe6'><td>亞德客-KY</td><td>1.79%</td><td>1.74%</td><td style='color:#188038'><b>▼ -0.05%</b></td></tr><tr style='background:white'><td>顯示更多</td><td>0.00%</td><td>顯示更多</td><td style='color:#333'><b>- +0.00%</b></td></tr></tbody></table></div></body></html>
